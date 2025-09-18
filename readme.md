@@ -7,9 +7,9 @@
 ## 事前準備  
 Google Cloud (必須):   
 - 建立專案並取得編號和ID  
-- 設定Identity and Access Management (IAM) 並把推特帳密和用戶名輸入進去  
+- 設定Identity and Access Management (IAM) 權限新增 Secret Manager 密鑰存取者 
+- 設定secret manager 並把推特帳密和用戶名輸入進去  
  
-  
 個人推特帳號 (非選):  
 - 帳號  
 - 密碼  
@@ -54,5 +54,5 @@ postID `該推文的ID`
 has_image `是否含有影像`  
 ***
 ## 其他配置(重要)
-把一開始在GCP Identity and Access Management (IAM) 設定好的密鑰下載下來取名為`service-account.json`
+把一開始在GCP secret manager 設定好的密鑰下載下來取名為`service-account.json`
 

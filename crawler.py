@@ -255,6 +255,7 @@ def main():
         for keyword in keywords:
             print(f"---{keyword} 轉推開始---")
             try:
+                page.wait_for_load_state('domcontentloaded')
                 page.locator("a[data-testid='AppTabBar_Explore_Link']").click()
                 # print("1")
 
