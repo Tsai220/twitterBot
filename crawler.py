@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from playwright.sync_api import sync_playwright, expect
@@ -256,22 +257,21 @@ def main():
             print(f"---{keyword} 轉推開始---")
             try:
                 page.wait_for_load_state('domcontentloaded')
+                time.sleep(2)
                 page.locator("a[data-testid='AppTabBar_Explore_Link']").click()
                 # print("1")
 
                 page.locator("input[data-testid='SearchBox_Search_Input']").type(f"#{keyword} since:{today}",delay=330)
 
                 page.keyboard.press("Enter")
-                page.wait_for_load_state()
+
                 page.get_by_role("tab", name="最新").click()
                 page.wait_for_load_state('domcontentloaded')
+                time.sleep(2)
+                count =  page.locator( "div[data-testid='empty_state_header_text']" ).count()
 
-                count=page.locator("article").count()
-                print(count)
-                if  1 >= count != 0:
-
+                if count ==0 :
                     # print("2")
-
                     page.mouse.wheel(0, 250)
                     page.wait_for_timeout(500)
                     page.mouse.wheel(0, -250)
@@ -285,8 +285,9 @@ def main():
                     print("已過濾拒絕名單")
                     retweetGo = go_retweet(page,retweet_pre_data,unique_list)
                     print(f"---{keyword} 轉推結束---")
-                else:
+                elif count !=0 :
                     print(f"---{keyword} 無資料跳過---")
+
             except Exception as e:
                 print(f' 關鍵字迴圈出現錯誤 ,{e}')
                 print(f"---出現錯誤{keyword} 轉推強制跳過---")
