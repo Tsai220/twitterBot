@@ -57,7 +57,7 @@ def scroll(page, wait_time: int=1000, max_scroll: int = 30):
                                 "has_image": has_imgOrVideo
                             }
                             all_hrefs.append(data)
-                            # /asanagi_haru/status/1964275401875693805
+
 
                 page.wait_for_timeout(1000)
                 page.evaluate("window.scrollBy(0, 400)") #極端情況下每400px會畫面更新
@@ -199,7 +199,7 @@ def main():
             "Origin": "https://x.com"
             }
         )
-        # 沒usr_data情況下 會卡住 需要檢查登入流程判斷
+
 
 
         # 開啟一個新的分頁
@@ -253,7 +253,7 @@ def main():
 
 
         time.sleep(1)
-        # 登入卻沒去點的情況 0918!!!!!
+
         page.goto("https://x.com/explore")
         page.wait_for_load_state()
 
