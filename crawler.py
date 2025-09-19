@@ -252,16 +252,19 @@ def main():
 
 
 
+        time.sleep(1)
+        # 登入卻沒去點的情況 0918!!!!!
+        page.goto("https://x.com/explore")
+        page.wait_for_load_state()
+
         #收尋
         for keyword in keywords:
             print(f"---{keyword} 轉推開始---")
             try:
-                page.wait_for_load_state('domcontentloaded')
-                time.sleep(2)
-                page.locator("a[data-testid='AppTabBar_Explore_Link']").click()
-                # print("1")
 
-                page.locator("input[data-testid='SearchBox_Search_Input']").type(f"#{keyword} since:{today}",delay=330)
+                searchBox=page.locator("input[data-testid='SearchBox_Search_Input']")
+                searchBox.fill("")
+                searchBox.type(f"#{keyword} since:{today}",delay=330)
 
                 page.keyboard.press("Enter")
 
