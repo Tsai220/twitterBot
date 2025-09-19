@@ -5,7 +5,20 @@ from playwright.sync_api import sync_playwright, expect
 import json
 from google.cloud import secretmanager
 from google.oauth2 import service_account
+import psutil
+from pytest_playwright.pytest_playwright import browser
 
+
+def cleanChromium():
+    for proc in psutil.process_iter():
+        try:
+            name = proc.name().lower()
+            if "chrome" in name or "chromium" in name:
+                print(f"Kill old process: PID={proc.pid}")
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return True
 def is_filled(value):
     return value is not None and value.strip() != ""
 
@@ -159,141 +172,147 @@ def go_retweet(page,NewData,  unique_list):
 
 
 def main():
+    clean= cleanChromium()
+    if clean:
 
-    config = ConfigParser()
-    config.read('set.ini', encoding='utf-8')
-    days=int(config['APP_SET']['days'])
-    today = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
-    keywords = config['APP_SET']['keywords'].split(',')
-    userReject = config['APP_SET']['userReject'].split(',')
-    x_acc= str(config['APP_SET']['X_acc'])
-    x_pwd = str(config['APP_SET']['X_pwd'])
-    x_usrname = str(config['APP_SET']['X_usrname'])
-    gcp_SM_PID= str(config['APP_SET']['PROJECT_ID'])
-    gcp_SM_SID = str(config['APP_SET']['secret_ID'])
-    # 優先級 gcp > local acc
-    has_manual_creds = all(map(is_filled, [x_acc, x_pwd, x_usrname]))
-    has_gcp_creds = all(map(is_filled, [gcp_SM_PID, gcp_SM_SID]))
-    acc, pw, username=None,None,None
-    if has_manual_creds and not has_gcp_creds:
-        acc,pw,username=x_acc,x_pwd,x_usrname
-    elif not has_manual_creds and has_gcp_creds:
-        pwd = get_secret(gcp_SM_PID, gcp_SM_SID)
-        acc,pw,username=pwd.splitlines()
-    elif has_manual_creds and has_gcp_creds:
-        pwd = get_secret(gcp_SM_PID, gcp_SM_SID)
-        acc, pw, username = pwd.splitlines()
-    else:
-        print("set.ini 設定錯誤，請設定好再重新啟動")
+        config = ConfigParser()
+        config.read('set.ini', encoding='utf-8')
+        days=int(config['APP_SET']['days'])
+        today = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
+        keywords = config['APP_SET']['keywords'].split(',')
+        userReject = config['APP_SET']['userReject'].split(',')
+        x_acc= str(config['APP_SET']['X_acc'])
+        x_pwd = str(config['APP_SET']['X_pwd'])
+        x_usrname = str(config['APP_SET']['X_usrname'])
+        gcp_SM_PID= str(config['APP_SET']['PROJECT_ID'])
+        gcp_SM_SID = str(config['APP_SET']['secret_ID'])
+        # 優先級 gcp > local acc
+        has_manual_creds = all(map(is_filled, [x_acc, x_pwd, x_usrname]))
+        has_gcp_creds = all(map(is_filled, [gcp_SM_PID, gcp_SM_SID]))
+        acc, pw, username=None,None,None
+        if has_manual_creds and not has_gcp_creds:
+            acc,pw,username=x_acc,x_pwd,x_usrname
+        elif not has_manual_creds and has_gcp_creds:
+            pwd = get_secret(gcp_SM_PID, gcp_SM_SID)
+            acc,pw,username=pwd.splitlines()
+        elif has_manual_creds and has_gcp_creds:
+            pwd = get_secret(gcp_SM_PID, gcp_SM_SID)
+            acc, pw, username = pwd.splitlines()
+        else:
+            print("set.ini 設定錯誤，請設定好再重新啟動")
 
-    with (sync_playwright() as p):
+        with (sync_playwright() as p):
 
-        context = p.chromium.launch_persistent_context(
-            user_data_dir="./usr_data",
-            headless=True,
-            locale="zh-TW",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-            extra_http_headers={
-            "Accept-Language": "zh-TW",
-            "Referer": "https://x.com/",
-            "Origin": "https://x.com"
-            }
-        )
-
-
-
-        # 開啟一個新的分頁
-        page = context.new_page()
-
-        # 導航至指定網址
-        page.goto("https://x.com")
-        page.wait_for_load_state("domcontentloaded")
-        try:
-            cookies = context.cookies()
-            is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
-            if is_logged_in:
-                print("已登入")
-            elif not is_logged_in:
-                print("未登入，進行登入")
-                page.wait_for_load_state()
-
-                page.locator("a[data-testid='loginButton']").click()
-
-                page.wait_for_load_state()
+            context = p.chromium.launch_persistent_context(
+                user_data_dir="./usr_data",
+                headless=True,
+                locale="zh-TW",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+                extra_http_headers={
+                "Accept-Language": "zh-TW",
+                "Referer": "https://x.com/",
+                "Origin": "https://x.com"
+                }
+            )
 
 
 
+            # 開啟一個新的分頁
+            page = context.new_page()
 
-                page.locator("input[autocomplete='username']").type(acc, delay=400)
-
-                page.click("#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
-
-
-
-                try:
-                    expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
-                except:
-                    page.locator("input[name='text']").type(username, delay=300)
-
-                    page.locator("button[data-testid='ocfEnterTextNextButton']").click()
-
-
-                    page.locator("input[name='password']").type(pw, delay=250)
-                    page.locator("button[data-testid='LoginForm_Login_Button']").click()
-
-                else:
-                    page.locator("input[name='password']").type(pw,delay=350)
-
-                    page.click("button[data-testid='LoginForm_Login_Button']")
-                    page.wait_for_load_state()
-        except Exception as e:
-            print("登入流程失敗:", e)
-            return
-
-
-
-        time.sleep(1)
-
-        page.goto("https://x.com/explore")
-        page.wait_for_load_state()
-
-        #收尋
-        for keyword in keywords:
-            print(f"---{keyword} 轉推開始---")
+            # 導航至指定網址
+            page.goto("https://x.com")
+            page.wait_for_load_state("domcontentloaded")
             try:
+                cookies = context.cookies()
+                is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
+                if is_logged_in:
+                    print("已登入")
+                elif not is_logged_in:
+                    print("未登入，進行登入")
+                    page.wait_for_load_state()
 
-                searchBox=page.locator("input[data-testid='SearchBox_Search_Input']")
-                searchBox.fill("")
-                searchBox.type(f"#{keyword} since:{today}",delay=330)
+                    page.locator("a[data-testid='loginButton']").click()
 
-                page.keyboard.press("Enter")
+                    page.wait_for_load_state()
 
-                page.get_by_role("tab", name="最新").click()
-                page.wait_for_load_state('domcontentloaded')
-                time.sleep(2)
-                count =  page.locator( "div[data-testid='empty_state_header_text']" ).count()
 
-                if count ==0 :
-                    # print("2")
-                    page.mouse.wheel(0, 250)
-                    page.wait_for_timeout(500)
-                    page.mouse.wheel(0, -250)
-                    # print("3")
 
-                    #讀取所有文章 -> 取文章的ID和作者->判斷作者是否拒絕機器人->判斷後整理待轉推list -> 依序轉推
-                    data=scroll(page)
 
-                    # print("4")
-                    retweet_pre_data, unique_list= retweet_pre(userReject,data,page)
-                    print("已過濾拒絕名單")
-                    retweetGo = go_retweet(page,retweet_pre_data,unique_list)
-                    print(f"---{keyword} 轉推結束---")
-                elif count !=0 :
-                    print(f"---{keyword} 無資料跳過---")
+                    page.locator("input[autocomplete='username']").type(acc, delay=400)
 
+                    page.click("#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
+
+
+
+                    try:
+                        expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
+                    except:
+                        page.locator("input[name='text']").type(username, delay=300)
+
+                        page.locator("button[data-testid='ocfEnterTextNextButton']").click()
+
+
+                        page.locator("input[name='password']").type(pw, delay=250)
+                        page.locator("button[data-testid='LoginForm_Login_Button']").click()
+
+                    else:
+                        page.locator("input[name='password']").type(pw,delay=350)
+
+                        page.click("button[data-testid='LoginForm_Login_Button']")
+                        page.wait_for_load_state()
             except Exception as e:
-                print(f' 關鍵字迴圈出現錯誤 ,{e}')
-                print(f"---出現錯誤{keyword} 轉推強制跳過---")
-        context.close()
+                print("登入流程失敗:", e)
+                return
 
+
+
+            time.sleep(1)
+
+            page.goto("https://x.com/explore")
+            page.wait_for_load_state()
+
+            #收尋
+            for keyword in keywords:
+                print(f"---{keyword} 轉推開始---")
+                try:
+
+                    searchBox=page.locator("input[data-testid='SearchBox_Search_Input']")
+                    searchBox.fill("")
+                    searchBox.type(f"#{keyword} since:{today}",delay=330)
+
+                    page.keyboard.press("Enter")
+
+                    page.get_by_role("tab", name="最新").click()
+                    page.wait_for_load_state('domcontentloaded')
+                    time.sleep(2)
+                    count =  page.locator( "div[data-testid='empty_state_header_text']" ).count()
+
+                    if count ==0 :
+                        # print("2")
+                        page.mouse.wheel(0, 250)
+                        page.wait_for_timeout(500)
+                        page.mouse.wheel(0, -250)
+                        # print("3")
+
+                        #讀取所有文章 -> 取文章的ID和作者->判斷作者是否拒絕機器人->判斷後整理待轉推list -> 依序轉推
+                        data=scroll(page)
+
+                        # print("4")
+                        retweet_pre_data, unique_list= retweet_pre(userReject,data,page)
+                        print("已過濾拒絕名單")
+                        retweetGo = go_retweet(page,retweet_pre_data,unique_list)
+                        print(f"---{keyword} 轉推結束---")
+                    elif count !=0 :
+                        print(f"---{keyword} 無資料跳過---")
+
+                except Exception as e:
+                    print(f' 關鍵字迴圈出現錯誤 ,{e}')
+                    print(f"---出現錯誤{keyword} 轉推強制跳過---")
+            print("此輪結束")
+            context.close()
+    elif not clean:
+        pass
+
+cleanChromium()
 main()
