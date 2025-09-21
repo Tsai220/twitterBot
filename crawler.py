@@ -17,7 +17,7 @@ def cleanChromium():
             if "chrome" in name or "chromium" in name:
                 print(f"Kill old process: PID={proc.pid}")
                 proc.kill()
-                ok=True
+            ok=True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             ok = False
             return
@@ -167,6 +167,7 @@ def go_retweet(page,NewData,  unique_list):
         retweet_button = first_article.locator("button[data-testid*='retweet']").first
 
         retweet_button.click()
+        time.sleep(1)
         page.click("#layers > div.css-175oi2r.r-zchlnj.r-1d2f490.r-u8s1d.r-ipm5af.r-1p0dtai.r-105ug2t > div > div > div > div.css-175oi2r.r-1ny4l3l > div > div.css-175oi2r.r-j2cz3j.r-14lw9ot.r-1q9bdsx.r-1upvrn0.r-1udh08x.r-u8s1d > div > div > div > div")
 
 
