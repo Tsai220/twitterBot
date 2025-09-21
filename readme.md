@@ -4,27 +4,27 @@
 ##### 
 
 ---
-## 事前準備  
-Google Cloud (必須):   
+## 事前準備
+### Google Cloud (必須):   
 - 建立專案並取得編號和ID  
 - 設定Identity and Access Management (IAM) 權限新增 Secret Manager 密鑰存取者 
 - 設定secret manager 並把推特帳密和用戶名輸入進去  
  
-個人推特帳號 (非選):  
+### 個人推特帳號 (非選):  
 - 帳號  
 - 密碼  
 - 用戶名  
   
   
-> #### 執行指令
-> ##### pip install -r requirements.txt
->
-> ##### playwright install chromium  
-
+### 執行指令
+```
+pip install -r requirements.txt
+playwright install chromium  
+```
 ***
 ## 設定
-> #### set.ini 爬蟲類設定
-> ##### ------------------------------------------------------------------------- 
+### set.ini 爬蟲設定
+
 > ##### userReject=None    `若有人不想被轉推可以設定`
 > ##### keywords=ことぴく,はのぴく,ことメモ,見どころはのぴ  `hashtag關鍵字`
 > ##### days=2   `幾天前到現在的新推文`
@@ -34,12 +34,11 @@ Google Cloud (必須):
 > ##### X_pwd=None  `twitter 密碼`
 > ##### X_usrname=None `twitter 用戶名 `
 > 
-  
-> #### schedule.ini 任務定時設定(即時生效)
-> ##### ------------------------------------------------------------------------- 
-> ##### frequency_every_min=65    `每X分鐘執行`
->
 
+### schedule.ini 任務定時設定(即時生效)
+
+> ##### frequency_start=5         `每整點幾分"起"`
+> ##### frequency_every_min=30    `每整點隔X分鐘`
 
 ***
 ## 紀錄

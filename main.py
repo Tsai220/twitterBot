@@ -1,7 +1,7 @@
 import sys
 from configparser import ConfigParser
-import schedule
 import time
+import datetime
 import os
 import shutil
 import crawler
@@ -9,94 +9,82 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import queue
 import threading
-usrData= './usr_data'
-filename='schedule.ini'
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
+
+usrData = './usr_data'
+filename = 'schedule.ini'
 task_queue = queue.Queue()
 
+scheduler = BackgroundScheduler()
+
 def delete_uerData():
-    if not os.path.exists(usrData):
-        pass
-    elif os.path.isfile(usrData):
+    if os.path.exists(usrData) and os.path.isdir(usrData):
         try:
             shutil.rmtree(usrData)
         except OSError as e:
             print(f'{usrData} 出現錯誤: {e}')
 
-
 def crawlerMain():
     crawler.main()
 
 def default_job():
-    schedule.clear()
-    schedule.every().monday.at("04:45").do(delete_uerData)
-    schedule.every().hour.at(":05").do(crawlerMain)
-    print("default job set done..! ")
-    return
+    scheduler.remove_all_jobs()
+    scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
+    scheduler.add_job(crawlerMain, CronTrigger(minute=5), id='crawler_scheduler', replace_existing=True)
+    print("default job set done..!")
 
 def change_job(jobData):
-    schedule.clear()
-    if jobData['frequency_every_min'].isdigit():
-        min=int(jobData['frequency_every_min'])
-        schedule.every(min).minutes.do(crawlerMain)
-    else:
+    scheduler.remove_all_jobs()
+    try:
+        start_min= int(jobData['frequency_start'])
+        min = int(jobData['frequency_every_min'])
+        scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min},{min}'), id='crawler_scheduler', replace_existing=True)
+        scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
+        print(f"已更新，每 {min} 分鐘執行爬蟲")
+    except ValueError:
         print("偵測非數字 任務未建立")
-    return
-
 
 def job_allocator():
     default_job()
+    scheduler.start()
 
     while True:
-
         try:
             task = task_queue.get_nowait()
             if task['new_job']:
                 print("Get new job call")
-                jobData=task
-                ch= change_job(jobData)
-                schedule.every().monday.at("04:45").do(delete_uerData)
-
-
-                # 清除任務、重建任務
+                change_job(task)
         except queue.Empty:
             pass
-
-        schedule.run_pending()
         time.sleep(1)
 
 class SetFileWatcher(FileSystemEventHandler):
-    def __init__(self,filename):
+    def __init__(self, filename):
         self.filename = filename
         self.config = ConfigParser()
-        self.osName=sys.platform
+        self.osName = sys.platform
 
     def job_done(self):
-        job = {'new_job': False}
         self.config.read(self.filename, encoding='utf-8')
         print("schedule.ini had change")
-        # --------
+        frequency_start=self.config['SCHEDULE_SET']['frequency_start']
         frequency_every_min = self.config['SCHEDULE_SET']['frequency_every_min']
         job = {
             'new_job': True,
-            'frequency_every_min': frequency_every_min
+            'frequency_every_min': frequency_every_min,
+            'frequency_start' : frequency_start,
         }
-        # 這邊可以檢視ini檔是否改變後再發出信號
         task_queue.put(job)
 
-    def on_modified(self,event):
-        if self.osName=='win32':
-            if event.src_path.endswith(self.filename):
-                self.job_done()
+    def on_modified(self, event):
+        if self.osName == 'win32' and event.src_path.endswith(self.filename):
+            self.job_done()
 
-    def on_moved(self,event):
-        if self.osName=='linux':
-            if not event.is_directory and os.path.basename(event.dest_path) == self.filename:
-                self.job_done()
-
-
-
-
+    def on_moved(self, event):
+        if self.osName == 'linux' and not event.is_directory and os.path.basename(event.dest_path) == self.filename:
+            self.job_done()
 
 def start_watchdog(filename):
     event = SetFileWatcher(filename)
@@ -115,22 +103,17 @@ def start_watchdog(filename):
 
     threading.Thread(target=watchdog_loop, daemon=True).start()
 
-
 def main():
     start_watchdog(filename)
     time.sleep(1)
     threading.Thread(target=job_allocator, daemon=True).start()
 
-    #主線程
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("程式中止!")
+        scheduler.shutdown()
 
 if __name__ == "__main__":
     main()
-
-
-
-
