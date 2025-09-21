@@ -1,3 +1,4 @@
+import sys
 from configparser import ConfigParser
 import schedule
 import time
@@ -31,8 +32,7 @@ def default_job():
     schedule.every().monday.at("04:45").do(delete_uerData)
     schedule.every().hour.at(":05").do(crawlerMain)
     print("default job set done..! ")
-    for job in schedule.jobs:
-        print(job)
+    return
 
 def change_job(jobData):
     schedule.clear()
@@ -56,8 +56,7 @@ def job_allocator():
                 jobData=task
                 ch= change_job(jobData)
                 schedule.every().monday.at("04:45").do(delete_uerData)
-                for job in schedule.jobs:
-                    print(job)
+
 
                 # 清除任務、重建任務
         except queue.Empty:
@@ -70,20 +69,30 @@ class SetFileWatcher(FileSystemEventHandler):
     def __init__(self,filename):
         self.filename = filename
         self.config = ConfigParser()
+        self.osName=sys.platform
 
+    def job_done(self):
+        job = {'new_job': False}
+        self.config.read(self.filename, encoding='utf-8')
+        print("schedule.ini had change")
+        # --------
+        frequency_every_min = self.config['SCHEDULE_SET']['frequency_every_min']
+        job = {
+            'new_job': True,
+            'frequency_every_min': frequency_every_min
+        }
+        # 這邊可以檢視ini檔是否改變後再發出信號
+        task_queue.put(job)
 
     def on_modified(self,event):
-        if event.src_path.endswith(self.filename):
-            job = {'new_job':False}
-            self.config.read(self.filename, encoding='utf-8')
-            #--------
-            frequency_every_min=self.config['SCHEDULE_SET']['frequency_every_min']
-            job= {
-                'new_job':True,
-                'frequency_every_min':frequency_every_min
-            }
-            # 這邊可以檢視ini檔是否改變後再發出信號
-            task_queue.put(job)
+        if self.osName=='win32':
+            if event.src_path.endswith(self.filename):
+                self.job_done()
+
+    def on_moved(self,event):
+        if self.osName=='linux':
+            if not event.is_directory and os.path.basename(event.dest_path) == self.filename:
+                self.job_done()
 
 
 
