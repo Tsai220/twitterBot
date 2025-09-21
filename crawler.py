@@ -10,15 +10,18 @@ from pytest_playwright.pytest_playwright import browser
 
 
 def cleanChromium():
+    ok=False
     for proc in psutil.process_iter():
         try:
             name = proc.name().lower()
             if "chrome" in name or "chromium" in name:
                 print(f"Kill old process: PID={proc.pid}")
                 proc.kill()
+                ok=True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-    return True
+            ok = False
+            return
+    return ok
 def is_filled(value):
     return value is not None and value.strip() != ""
 
@@ -177,15 +180,15 @@ def main():
 
         config = ConfigParser()
         config.read('set.ini', encoding='utf-8')
-        days=int(config['APP_SET']['days'])
+        days=int(config['SPIDER']['days'])
         today = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
-        keywords = config['APP_SET']['keywords'].split(',')
-        userReject = config['APP_SET']['userReject'].split(',')
-        x_acc= str(config['APP_SET']['X_acc'])
-        x_pwd = str(config['APP_SET']['X_pwd'])
-        x_usrname = str(config['APP_SET']['X_usrname'])
-        gcp_SM_PID= str(config['APP_SET']['PROJECT_ID'])
-        gcp_SM_SID = str(config['APP_SET']['secret_ID'])
+        keywords = config['SPIDER']['keywords'].split(',')
+        userReject = config['SPIDER']['userReject'].split(',')
+        x_acc= str(config['SPIDER']['X_acc'])
+        x_pwd = str(config['SPIDER']['X_pwd'])
+        x_usrname = str(config['SPIDER']['X_usrname'])
+        gcp_SM_PID= str(config['SPIDER']['PROJECT_ID'])
+        gcp_SM_SID = str(config['SPIDER']['secret_ID'])
         # 優先級 gcp > local acc
         has_manual_creds = all(map(is_filled, [x_acc, x_pwd, x_usrname]))
         has_gcp_creds = all(map(is_filled, [gcp_SM_PID, gcp_SM_SID]))
@@ -282,7 +285,8 @@ def main():
                     searchBox.type(f"#{keyword} since:{today}",delay=330)
 
                     page.keyboard.press("Enter")
-
+                    page.wait_for_load_state('domcontentloaded')
+                    time.sleep(1.5)
                     page.get_by_role("tab", name="最新").click()
                     page.wait_for_load_state('domcontentloaded')
                     time.sleep(2)
@@ -303,16 +307,15 @@ def main():
                         print("已過濾拒絕名單")
                         retweetGo = go_retweet(page,retweet_pre_data,unique_list)
                         print(f"---{keyword} 轉推結束---")
+                        time.sleep(2)
                     elif count !=0 :
                         print(f"---{keyword} 無資料跳過---")
-
+                        time.sleep(2)
                 except Exception as e:
                     print(f' 關鍵字迴圈出現錯誤 ,{e}')
                     print(f"---出現錯誤{keyword} 轉推強制跳過---")
+                    time.sleep(2)
             print("此輪結束")
             context.close()
     elif not clean:
         pass
-
-cleanChromium()
-main()
