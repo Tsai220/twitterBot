@@ -39,12 +39,13 @@ def change_job(jobData):
     scheduler.remove_all_jobs()
     try:
         start_min= int(jobData['frequency_start'])
-        min = int(jobData['frequency_every_min'])
-        scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min},{min}'), id='crawler_scheduler', replace_existing=True)
+        minute2 = int(jobData['frequency_every_min'])
+        scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True)
         scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
-        print(f"已更新，每 {min} 分鐘執行爬蟲")
+        print(f"已更新，每整點{start_min}起，每隔{minute2}分執行爬蟲")
     except ValueError:
         print("偵測非數字 任務未建立")
+    return
 
 def job_allocator():
     default_job()
