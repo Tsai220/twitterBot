@@ -291,7 +291,7 @@ async def main():
                 print(f"---{keyword} 轉推開始---")
                 try:
                     await asyncio.sleep(1)
-                    searchBox = page.locator("input[data-testid='SearchBox_Search_Input']")
+                    searchBox = page.locator("input[data-testid='SearchBox_Search_Input']"); print("test")
                     await searchBox.fill("")
                     await searchBox.type(f"#{keyword} since:{today}", delay=330)
 
@@ -300,7 +300,7 @@ async def main():
                     await page.get_by_role("tab", name="最新").click()
                     await page.wait_for_load_state()
                     await asyncio.sleep(1)
-                    count = page.locator("div[data-testid='empty_state_header_text']").count() # 不須await
+                    count = page.locator("div[data-testid='empty_state_header_text']").count()
 
                     if count == 0:
                         await page.mouse.wheel(0, 250)
