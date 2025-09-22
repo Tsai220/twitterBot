@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import sys
 from configparser import ConfigParser
@@ -28,7 +29,10 @@ def delete_uerData():
             print(f'{usrData} 出現錯誤: {e}')
 
 def crawlerMain():
-    crawler.main()
+    try:
+        asyncio.run(crawler.main())
+    except Exception as e:
+        print(f'{e}')
 
 def default_job():
     #0921 改成啟動程式直接套用ini檔?
