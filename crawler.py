@@ -210,119 +210,124 @@ async def main():
 
 
         async with async_playwright() as p:
-
-            # await 瀏覽器啟動
-            context = await p.chromium.launch_persistent_context(
-                slow_mo=100,
-                user_data_dir="./usr_data",
-                headless=True,
-                locale="zh-TW",
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/116.0.0.0 Safari/537.36"
-                ),
-                extra_http_headers={
-                    "Accept-Language": "zh-TW",
-                    "Referer": "https://x.com/",
-                    "Origin": "https://x.com"
-                },
-                args=[
-                    "--lang=zh-TW",
-                    "--disable-blink-features=AutomationControlled",  # 移除 Playwright 標記
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-extensions",
-                    "--disable-infobars",
-                    "--start-maximized"
-                ]
-            )
-
-            page = await context.new_page()
-
-            # 至指定網址
-            await page.goto("https://x.com")
-            await page.wait_for_load_state()
             try:
-                cookies = await context.cookies()
-                is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
-                if is_logged_in:
-                    print("已登入")
-                elif not is_logged_in:
-                    print("未登入，進行登入")
-                    await page.wait_for_load_state()  #
+                # await 瀏覽器啟動
+                context = await p.chromium.launch_persistent_context(
+                    slow_mo=100,
+                    user_data_dir="./usr_data",
+                    headless=True,
+                    locale="zh-TW",
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/116.0.0.0 Safari/537.36"
+                    ),
+                    extra_http_headers={
+                        "Accept-Language": "zh-TW",
+                        "Referer": "https://x.com/",
+                        "Origin": "https://x.com"
+                    },
+                    args=[
+                        "--lang=zh-TW",
+                        "--disable-blink-features=AutomationControlled",  # 移除 Playwright 標記
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-extensions",
+                        "--disable-infobars",
+                        "--start-maximized"
+                    ]
+                )
 
-                    await page.locator("a[data-testid='loginButton']").click()
+                page = await context.new_page()
 
-                    await page.wait_for_load_state()
-
-                    await page.locator("input[autocomplete='username']").type(acc, delay=400)
-
-                    await page.click(
-                        "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
-
-                    await page.wait_for_load_state()
-
-                    try:
-                        await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
-                    except:
-                        await page.locator("input[name='text']").type(username, delay=300)
-
-                        await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
-
-                        await page.locator("input[name='password']").type(pw, delay=250)
-                        await page.locator("button[data-testid='LoginForm_Login_Button']").click()
-
-                    else:
-                        await page.locator("input[name='password']").type(pw, delay=350)
-
-                        await page.click("button[data-testid='LoginForm_Login_Button']")
-                        await page.wait_for_load_state()
-            except Exception as e:
-                print("登入流程失敗:", e)
-                return
-
-            await page.goto("https://x.com/explore")
-            await page.wait_for_load_state()
-
-            # 收尋
-            for keyword in keywords:
-                print(f"---{keyword} 轉推開始---")
+                # 至指定網址
+                await page.goto("https://x.com")
+                await page.wait_for_load_state()
+            except Exception as a:
+                print(f'網頁啟動程序錯誤 {a}')
+            else:
+                print(f'網頁啟動完成')
                 try:
-                    await asyncio.sleep(1)
-                    searchBox = page.locator("input[data-testid='SearchBox_Search_Input']"); print("test")
-                    await searchBox.fill("")
-                    await searchBox.type(f"#{keyword} since:{today}", delay=330)
+                    cookies = await context.cookies()
+                    is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
+                    if is_logged_in:
+                        print("已登入")
+                    elif not is_logged_in:
+                        print("未登入，進行登入")
+                        await page.wait_for_load_state()  #
 
-                    await page.keyboard.press("Enter")
-                    await page.wait_for_load_state()
-                    await page.get_by_role("tab", name="最新").click()
-                    await page.wait_for_load_state()
-                    await asyncio.sleep(1)
-                    count = page.locator("div[data-testid='empty_state_header_text']").count()
+                        await page.locator("a[data-testid='loginButton']").click()
 
-                    if count == 0:
-                        await page.mouse.wheel(0, 250)
-                        await page.wait_for_timeout(500)
-                        await page.mouse.wheel(0, -250)
+                        await page.wait_for_load_state()
 
+                        await page.locator("input[autocomplete='username']").type(acc, delay=400)
 
-                        data = await scroll(page)
+                        await page.click(
+                            "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
 
-                        retweet_pre_data, unique_list = await retweet_pre(userReject, data, page)
-                        print("已過濾拒絕名單")
-                        await go_retweet(page, retweet_pre_data, unique_list)
-                        print(f"---{keyword} 轉推結束---")
-                        await asyncio.sleep(2)
-                    elif count != 0:
-                        print(f"---{keyword} 無資料跳過---")
-                        await asyncio.sleep(2)
+                        await page.wait_for_load_state()
+
+                        try:
+                            await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
+                        except:
+                            await page.locator("input[name='text']").type(username, delay=300)
+
+                            await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
+
+                            await page.locator("input[name='password']").type(pw, delay=250)
+                            await page.locator("button[data-testid='LoginForm_Login_Button']").click()
+
+                        else:
+                            await page.locator("input[name='password']").type(pw, delay=350)
+
+                            await page.click("button[data-testid='LoginForm_Login_Button']")
+                            await page.wait_for_load_state()
                 except Exception as e:
-                    print(f' 關鍵字迴圈出現錯誤 ,{e}')
-                    print(f"---出現錯誤{keyword} 轉推強制跳過---")
-                    await asyncio.sleep(2)
-            print("此輪結束")
+                    print("登入流程失敗:", e)
+                    return
+                else:
+
+                    await page.goto("https://x.com/explore")
+                    await page.wait_for_load_state()
+
+                    # 收尋
+                    for keyword in keywords:
+                        print(f"---{keyword} 轉推開始---")
+                        try:
+                            await asyncio.sleep(1)
+                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']"); print("test")
+                            await searchBox.fill("")
+                            await searchBox.type(f"#{keyword} since:{today}", delay=330)
+
+                            await page.keyboard.press("Enter")
+                            await page.wait_for_load_state()
+                            await page.get_by_role("tab", name="最新").click()
+                            await page.wait_for_load_state()
+                            await asyncio.sleep(1)
+                            count = page.locator("div[data-testid='empty_state_header_text']").count()
+
+                            if count == 0:
+                                await page.mouse.wheel(0, 250)
+                                await page.wait_for_timeout(500)
+                                await page.mouse.wheel(0, -250)
+
+
+                                data = await scroll(page)
+
+                                retweet_pre_data, unique_list = await retweet_pre(userReject, data, page)
+                                print("已過濾拒絕名單")
+                                await go_retweet(page, retweet_pre_data, unique_list)
+                                print(f"---{keyword} 轉推結束---")
+                                await asyncio.sleep(2)
+                            elif count != 0:
+                                print(f"---{keyword} 無資料跳過---")
+                                await asyncio.sleep(2)
+                        except Exception as e:
+                            print(f' 關鍵字迴圈出現錯誤 ,{e}')
+                            print(f"---出現錯誤{keyword} 轉推強制跳過---")
+                            await asyncio.sleep(2)
+                    print("此輪結束")
             await context.close()
     elif not clean:
         pass
