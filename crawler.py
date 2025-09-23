@@ -305,7 +305,7 @@ async def main():
                             await page.get_by_role("tab", name="最新").click()
                             await page.wait_for_load_state()
                             await asyncio.sleep(1)
-                            count = page.locator("div[data-testid='empty_state_header_text']").count()
+                            count = await page.locator("div[data-testid='empty_state_header_text']").count()
 
                             if count == 0:
                                 await page.mouse.wheel(0, 250)
