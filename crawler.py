@@ -1,4 +1,3 @@
-import random
 import time
 import asyncio  # 引入 asyncio 以執行非同步主程式
 from datetime import datetime, timedelta
@@ -12,10 +11,7 @@ import psutil
 from pytest_playwright.pytest_playwright import browser
 
 
-async def randomTime():
-    timer =  round(random.uniform(2.0, 4.0), 2)
-
-    await  asyncio.sleep(timer)
+# 你的 IP 被封鎖或打上風險標記
 
 async def cleanChromium():
     ok = False
@@ -172,7 +168,7 @@ async def go_retweet(page, NewData, unique_list):
         retweet_button = first_article.locator("button[data-testid*='retweet']").first
 
         await retweet_button.click()
-        await randomTime()
+        await asyncio.sleep(1)
         await page.click(
             "#layers > div.css-175oi2r.r-zchlnj.r-1d2f490.r-u8s1d.r-ipm5af.r-1p0dtai.r-105ug2t > div > div > div > div.css-175oi2r.r-1ny4l3l > div > div.css-175oi2r.r-j2cz3j.r-14lw9ot.r-1q9bdsx.r-1upvrn0.r-1udh08x.r-u8s1d > div > div > div > div")
 
@@ -299,8 +295,8 @@ async def main():
                     for keyword in keywords:
                         print(f"---{keyword} 轉推開始---")
                         try:
-                            await randomTime()
-                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']")
+                            await asyncio.sleep(1)
+                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']"); print("test")
                             await searchBox.fill("")
                             await searchBox.type(f"#{keyword} since:{today}", delay=330)
 
@@ -308,7 +304,7 @@ async def main():
                             await page.wait_for_load_state()
                             await page.get_by_role("tab", name="最新").click()
                             await page.wait_for_load_state()
-                            await randomTime()
+                            await asyncio.sleep(1)
                             count = await page.locator("div[data-testid='empty_state_header_text']").count()
 
                             if count == 0:
@@ -323,14 +319,14 @@ async def main():
                                 print("已過濾拒絕名單")
                                 await go_retweet(page, retweet_pre_data, unique_list)
                                 print(f"---{keyword} 轉推結束---")
-                                await randomTime()
+                                await asyncio.sleep(2)
                             elif count != 0:
                                 print(f"---{keyword} 無資料跳過---")
-                                await randomTime()
+                                await asyncio.sleep(2)
                         except Exception as e:
                             print(f' 關鍵字迴圈出現錯誤 ,{e}')
                             print(f"---出現錯誤{keyword} 轉推強制跳過---")
-                            await randomTime()
+                            await asyncio.sleep(2)
                     print("此輪結束")
             await context.close()
     elif not clean:
