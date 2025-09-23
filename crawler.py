@@ -1,15 +1,12 @@
 import random
-import time
-import asyncio  # 引入 asyncio 以執行非同步主程式
+import asyncio
 from datetime import datetime, timedelta
 from configparser import ConfigParser
-# 將 sync_api 改為 async_api 以支援 await
 from playwright.async_api import async_playwright, expect
 import json
 from google.cloud import secretmanager
 from google.oauth2 import service_account
 import psutil
-from pytest_playwright.pytest_playwright import browser
 
 
 async def randomTime():
