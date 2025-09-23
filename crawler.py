@@ -296,7 +296,7 @@ async def main():
                         print(f"---{keyword} 轉推開始---")
                         try:
                             await asyncio.sleep(1)
-                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']"); print("test")
+                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']")
                             await searchBox.fill("")
                             await searchBox.type(f"#{keyword} since:{today}", delay=330)
 
