@@ -39,7 +39,7 @@ def default_job():
     default_config = configparser.ConfigParser()
     default_config.read(filename)
     start_min= default_config['SCHEDULE_SET']['frequency_start']
-    minute2= default_config['SCHEDULE_SET']['frequency_end']
+    minute2= default_config['SCHEDULE_SET']['frequency_every_min']
     scheduler.remove_all_jobs()
     scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
     scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True)
