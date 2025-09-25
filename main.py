@@ -13,7 +13,7 @@ import queue
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-
+import concurrent.futures
 
 usrData = './usr_data'
 filename = 'schedule.ini'
@@ -28,21 +28,26 @@ def delete_uerData():
         except OSError as e:
             print(f'{usrData} 出現錯誤: {e}')
 
-def crawlerMain():
-    try:
+def crawlerMain(timeoutAdaptive):
+    def run():
         asyncio.run(crawler.main())
-    except Exception as e:
-        print(f'{e}')
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(run)
+        try:
+            future.result(timeout=timeoutAdaptive)
+        except concurrent.futures.TimeoutError:
+            print("整體任務超時 強制結束")
 
 def default_job():
-    #0921 改成啟動程式直接套用ini檔?
     default_config = configparser.ConfigParser()
     default_config.read(filename)
     start_min= default_config['SCHEDULE_SET']['frequency_start']
     minute2= default_config['SCHEDULE_SET']['frequency_every_min']
+    timeoutAdaptive= ((int(start_min + minute2)) / 2) * 60
     scheduler.remove_all_jobs()
-    scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
-    scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True)
+    scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True ,max_instances=1)
+    scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True,max_instances=1,args=(timeoutAdaptive,))
     print("default job set done..!")
 
 def change_job(jobData):
@@ -50,11 +55,12 @@ def change_job(jobData):
     try:
         start_min= int(jobData['frequency_start'])
         minute2 = int(jobData['frequency_every_min'])
-        scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True)
-        scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True)
+        timeoutAdaptive = int(jobData['timeoutAdaptive'])
+        scheduler.add_job(crawlerMain, CronTrigger(minute=f'{start_min}/{minute2}'), id='crawler_scheduler', replace_existing=True,max_instances=1,args=(timeoutAdaptive,))
+        scheduler.add_job(delete_uerData, CronTrigger(day_of_week='mon', hour=4, minute=45), id='delete_usrData', replace_existing=True,max_instances=1)
         print(f"已更新，每整點{start_min}起，每隔{minute2}分執行爬蟲")
     except ValueError:
-        print("偵測非數字 任務未建立")
+        print("非數字 任務未建立")
     return
 
 def job_allocator():
@@ -86,6 +92,7 @@ class SetFileWatcher(FileSystemEventHandler):
             'new_job': True,
             'frequency_every_min': frequency_every_min,
             'frequency_start' : frequency_start,
+            'timeoutAdaptive' : ((int(frequency_start+frequency_every_min))/2)*60
         }
         task_queue.put(job)
 
