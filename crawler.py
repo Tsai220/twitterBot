@@ -7,26 +7,25 @@ import json
 from google.cloud import secretmanager
 from google.oauth2 import service_account
 import psutil
-
-
+import re
+#需新增過濾廣告
 async def randomTime():
     timer =  round(random.uniform(2.0, 4.0), 2)
 
     await  asyncio.sleep(timer)
 
 async def cleanChromium():
-    ok = False
     for proc in psutil.process_iter():
         try:
             name = proc.name().lower()
             if "chrome" in name or "chromium" in name:
                 print(f"Kill old process: PID={proc.pid}")
                 proc.kill()
-            ok = True
+                return True
+
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            ok = False
-            return
-    return ok
+            continue
+    return False
 
 
 async def is_filled(value):
@@ -64,6 +63,9 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
                 for j in range(count):
                     anchor = anchors.nth(j)
                     aria_label = await anchor.get_attribute("aria-label")
+                    tweet_text = await article_element.text_content()
+                    if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
+                        break
                     if aria_label and "查看貼文分析" in aria_label:
                         href = await anchor.get_attribute("href")
                         if href:
@@ -239,7 +241,6 @@ async def main():
                             "--start-maximized"
                         ]
                     )
-
                     page = await context.new_page()
 
                     # 至指定網址
