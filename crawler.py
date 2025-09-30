@@ -1,5 +1,6 @@
 import random
 import asyncio
+import time
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from playwright.async_api import async_playwright, expect
@@ -14,18 +15,7 @@ async def randomTime():
 
     await  asyncio.sleep(timer)
 
-async def cleanChromium():
-    for proc in psutil.process_iter():
-        try:
-            name = proc.name().lower()
-            if "chrome" in name or "chromium" in name:
-                print(f"Kill old process: PID={proc.pid}")
-                proc.kill()
-                return True
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return False
 
 
 async def is_filled(value):
@@ -56,32 +46,33 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
             articles = page.locator("article")
             current_article_count = await articles.count()
             for i in range(current_article_count):
-
                 anchors = articles.nth(i).locator("a")
                 article_element = articles.nth(i)
                 count = await anchors.count()
                 for j in range(count):
                     anchor = anchors.nth(j)
-                    aria_label = await anchor.get_attribute("aria-label")
                     tweet_text = await article_element.text_content()
+                    link = anchor.locator('[data-testid="User-Name"]')
+                    link_locate =await link.locator('a[href*="/status/"]').count()
                     if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
                         break
-                    if aria_label and "查看貼文分析" in aria_label:
+                    if link_locate>0:
                         href = await anchor.get_attribute("href")
                         if href:
                             splitHref = href.split("/")
                             auther = splitHref[1]
                             postID = splitHref[3]
                             has_image = await article_element.locator("[data-testid='tweetPhoto']").count() > 0
-                            has_videoLink = await article_element.locator("[aria-label='播放']").count() > 0
+                            has_video= await article_element.locator("[data-testid='videoPlayer']").count() > 0
                             has_gif = await article_element.locator("[data-testid='videoComponent']").count() > 0
-                            has_imgOrVideo = has_image or has_videoLink or has_gif
+                            has_imgOrVideo = has_image or has_video or has_gif
                             data = {
                                 "auther": auther,
                                 "postID": postID,
                                 "has_image": has_imgOrVideo
                             }
                             all_hrefs.append(data)
+                        break
 
                 await page.wait_for_timeout(1000)
                 await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
@@ -180,159 +171,157 @@ async def go_retweet(page, NewData, unique_list):
 
 
 async def main():
-    clean = await cleanChromium()
-    if clean:
-        try:
-            config = ConfigParser()
-            config.read('set.ini', encoding='utf-8')
-            days = int(config['SPIDER_SET']['days'])
-            today = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
-            keywords = config['SPIDER_SET']['keywords'].split(',')
-            userReject = config['SPIDER_SET']['userReject'].split(',')
-            x_acc = str(config['SPIDER_SET']['X_acc'])
-            x_pwd = str(config['SPIDER_SET']['X_pwd'])
-            x_usrname = str(config['SPIDER_SET']['X_usrname'])
-            gcp_SM_PID = str(config['SPIDER_SET']['PROJECT_ID'])
-            gcp_SM_SID = str(config['SPIDER_SET']['secret_ID'])
-            # 優先級 gcp > local acc
-            has_manual_creds = await is_filled(x_acc) and await is_filled(x_pwd) and await is_filled(x_usrname)
-            has_gcp_creds = await is_filled(gcp_SM_PID) and await is_filled(gcp_SM_SID)
+    try:
+        config = ConfigParser()
+        config.read('set.ini', encoding='utf-8')
+        days = int(config['SPIDER_SET']['days'])
+        today = (datetime.today() - timedelta(days=days)).strftime('%Y-%m-%d')
+        keywords = config['SPIDER_SET']['keywords'].split(',')
+        userReject = config['SPIDER_SET']['userReject'].split(',')
+        x_acc = str(config['SPIDER_SET']['X_acc'])
+        x_pwd = str(config['SPIDER_SET']['X_pwd'])
+        x_usrname = str(config['SPIDER_SET']['X_usrname'])
+        gcp_SM_PID = str(config['SPIDER_SET']['PROJECT_ID'])
+        gcp_SM_SID = str(config['SPIDER_SET']['secret_ID'])
+        # 優先級 gcp > local acc
+        has_manual_creds = await is_filled(x_acc) and await is_filled(x_pwd) and await is_filled(x_usrname)
+        has_gcp_creds = await is_filled(gcp_SM_PID) and await is_filled(gcp_SM_SID)
 
-            acc, pw, username = None, None, None
-            if has_manual_creds and not has_gcp_creds:
-                acc, pw, username = x_acc, x_pwd, x_usrname
-            elif not has_manual_creds and has_gcp_creds:
-                pwd = await get_secret(gcp_SM_PID, gcp_SM_SID)
-                acc, pw, username = pwd.splitlines()
-            elif has_manual_creds and has_gcp_creds:
-                pwd = await get_secret(gcp_SM_PID, gcp_SM_SID)
-                acc, pw, username = pwd.splitlines()
+        acc, pw, username = None, None, None
+        if has_manual_creds and not has_gcp_creds:
+            acc, pw, username = x_acc, x_pwd, x_usrname
+        elif not has_manual_creds and has_gcp_creds:
+            pwd = await get_secret(gcp_SM_PID, gcp_SM_SID)
+            acc, pw, username = pwd.splitlines()
+        elif has_manual_creds and has_gcp_creds:
+            pwd = await get_secret(gcp_SM_PID, gcp_SM_SID)
+            acc, pw, username = pwd.splitlines()
+        else:
+            print("set.ini 設定錯誤，請設定好再重新啟動")
+            return
+
+
+        async with async_playwright() as p:
+            try:
+                # await 瀏覽器啟動
+                context = await p.chromium.launch_persistent_context(
+                    slow_mo=100,
+                    user_data_dir="./usr_data",
+                    headless=True,
+                    locale="zh-TW",
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/116.0.0.0 Safari/537.36"
+                    ),
+                    extra_http_headers={
+                        "Accept-Language": "zh-TW",
+                        "Referer": "https://x.com/",
+                        "Origin": "https://x.com"
+                    },
+                    args=[
+                        "--lang=zh-TW",
+                        "--disable-blink-features=AutomationControlled",  # 移除 Playwright 標記
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-extensions",
+                        "--disable-infobars",
+                        "--start-maximized"
+                    ]
+                )
+                page = await context.new_page()
+
+                # 至指定網址
+                await page.goto("https://x.com")
+                await page.wait_for_load_state()
+            except Exception as a:
+                print(f'網頁啟動程序錯誤 {a}')
             else:
-                print("set.ini 設定錯誤，請設定好再重新啟動")
-                return
-
-
-            async with async_playwright() as p:
+                print(f'網頁啟動完成')
                 try:
-                    # await 瀏覽器啟動
-                    context = await p.chromium.launch_persistent_context(
-                        slow_mo=100,
-                        user_data_dir="./usr_data",
-                        headless=True,
-                        locale="zh-TW",
-                        user_agent=(
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) "
-                            "Chrome/116.0.0.0 Safari/537.36"
-                        ),
-                        extra_http_headers={
-                            "Accept-Language": "zh-TW",
-                            "Referer": "https://x.com/",
-                            "Origin": "https://x.com"
-                        },
-                        args=[
-                            "--lang=zh-TW",
-                            "--disable-blink-features=AutomationControlled",  # 移除 Playwright 標記
-                            "--no-sandbox",
-                            "--disable-setuid-sandbox",
-                            "--disable-dev-shm-usage",
-                            "--disable-extensions",
-                            "--disable-infobars",
-                            "--start-maximized"
-                        ]
-                    )
-                    page = await context.new_page()
+                    cookies = await context.cookies()
+                    is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
+                    if is_logged_in:
+                        print("已登入")
+                    elif not is_logged_in:
+                        print("未登入，進行登入")
+                        await page.wait_for_load_state()  #
 
-                    # 至指定網址
-                    await page.goto("https://x.com")
-                    await page.wait_for_load_state()
-                except Exception as a:
-                    print(f'網頁啟動程序錯誤 {a}')
-                else:
-                    print(f'網頁啟動完成')
-                    try:
-                        cookies = await context.cookies()
-                        is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
-                        if is_logged_in:
-                            print("已登入")
-                        elif not is_logged_in:
-                            print("未登入，進行登入")
-                            await page.wait_for_load_state()  #
+                        await page.locator("a[data-testid='loginButton']").click()
 
-                            await page.locator("a[data-testid='loginButton']").click()
-
-                            await page.wait_for_load_state()
-
-                            await page.locator("input[autocomplete='username']").type(acc, delay=400)
-
-                            await page.click(
-                                "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
-
-                            await page.wait_for_load_state()
-
-                            try:
-                                await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
-                            except:
-                                await page.locator("input[name='text']").type(username, delay=300)
-
-                                await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
-
-                                await page.locator("input[name='password']").type(pw, delay=250)
-                                await page.locator("button[data-testid='LoginForm_Login_Button']").click()
-
-                            else:
-                                await page.locator("input[name='password']").type(pw, delay=350)
-
-                                await page.click("button[data-testid='LoginForm_Login_Button']")
-                                await page.wait_for_load_state()
-                    except Exception as e:
-                        print("登入流程失敗:", e)
-                        return
-                    else:
-
-                        await page.goto("https://x.com/explore")
                         await page.wait_for_load_state()
 
-                        # 收尋
-                        for keyword in keywords:
-                            print(f"---{keyword} 轉推開始---")
-                            try:
+                        await page.locator("input[autocomplete='username']").type(acc, delay=400)
+
+                        await page.click(
+                            "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
+
+                        await page.wait_for_load_state()
+
+                        try:
+                            await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
+                        except:
+                            await page.locator("input[name='text']").type(username, delay=300)
+
+                            await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
+
+                            await page.locator("input[name='password']").type(pw, delay=250)
+                            await page.locator("button[data-testid='LoginForm_Login_Button']").click()
+
+                        else:
+                            await page.locator("input[name='password']").type(pw, delay=350)
+
+                            await page.click("button[data-testid='LoginForm_Login_Button']")
+                            await page.wait_for_load_state()
+                except Exception as e:
+                    print("登入流程失敗:", e)
+                    return
+                else:
+
+                    await page.goto("https://x.com/explore")
+                    await page.wait_for_load_state()
+
+                    # 收尋
+                    for keyword in keywords:
+                        print(f"---{keyword} 轉推開始---")
+                        try:
+                            await randomTime()
+                            searchBox = page.locator("input[data-testid='SearchBox_Search_Input']")
+                            await searchBox.fill("")
+                            await searchBox.type(f"#{keyword} since:{today}", delay=330)
+
+                            await page.keyboard.press("Enter")
+                            await page.wait_for_load_state()
+                            # await page.get_by_role("tab", name="最新").click
+                            await page.locator('div[role="presentation"]:nth-child(2) a').click()
+                            await page.wait_for_load_state()
+                            await randomTime()
+                            count = await page.locator("div[data-testid='empty_state_header_text']").count()
+
+                            if count == 0:
+                                await page.mouse.wheel(0, 250)
+                                await page.wait_for_timeout(500)
+                                await page.mouse.wheel(0, -250)
+
+
+                                data = await scroll(page)
+
+                                retweet_pre_data, unique_list = await retweet_pre(userReject, data, page)
+                                print("已過濾拒絕名單")
+                                await go_retweet(page, retweet_pre_data, unique_list)
+                                print(f"---{keyword} 轉推結束---")
                                 await randomTime()
-                                searchBox = page.locator("input[data-testid='SearchBox_Search_Input']")
-                                await searchBox.fill("")
-                                await searchBox.type(f"#{keyword} since:{today}", delay=330)
-
-                                await page.keyboard.press("Enter")
-                                await page.wait_for_load_state()
-                                await page.get_by_role("tab", name="最新").click()
-                                await page.wait_for_load_state()
+                            elif count != 0:
+                                print(f"---{keyword} 無資料跳過---")
                                 await randomTime()
-                                count = await page.locator("div[data-testid='empty_state_header_text']").count()
+                        except Exception as e:
+                            print(f' 關鍵字迴圈出現錯誤 ,{e}')
+                            print(f"---出現錯誤{keyword} 轉推強制跳過---")
+                            await randomTime()
+                    print(f"此輪結束 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            await context.close()
+    except TimeoutError:
+        print("crawler.py : 爬蟲任務執行過久，強制結束")
 
-                                if count == 0:
-                                    await page.mouse.wheel(0, 250)
-                                    await page.wait_for_timeout(500)
-                                    await page.mouse.wheel(0, -250)
-
-
-                                    data = await scroll(page)
-
-                                    retweet_pre_data, unique_list = await retweet_pre(userReject, data, page)
-                                    print("已過濾拒絕名單")
-                                    await go_retweet(page, retweet_pre_data, unique_list)
-                                    print(f"---{keyword} 轉推結束---")
-                                    await randomTime()
-                                elif count != 0:
-                                    print(f"---{keyword} 無資料跳過---")
-                                    await randomTime()
-                            except Exception as e:
-                                print(f' 關鍵字迴圈出現錯誤 ,{e}')
-                                print(f"---出現錯誤{keyword} 轉推強制跳過---")
-                                await randomTime()
-                        print("此輪結束")
-                await context.close()
-        except TimeoutError:
-            print("crawler.py : 爬蟲任務執行過久，強制結束")
-    elif not clean:
-        pass
 
