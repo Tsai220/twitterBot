@@ -30,8 +30,8 @@ playwright install chromium
 > ##### userReject=None    `若有人不想被轉推可以設定`
 > ##### keywords=ことぴく,はのぴく,ことメモ,見どころはのぴ  `hashtag關鍵字`
 > ##### days=2   `幾天前到現在的新推文`
-> ##### PROJECT_ID=810413721043  `GCP 專案編號`
-> ##### secret_ID=twitter_hakobot_acc  `GCP 專案ID`
+> ##### PROJECT_ID=0000000000000  `GCP 專案編號`
+> ##### secret_ID=project_id  `GCP 專案ID`
 > ##### X_acc=None  `twitter 帳號`
 > ##### X_pwd=None  `twitter 密碼`
 > ##### X_usrname=None `twitter 用戶名 `
