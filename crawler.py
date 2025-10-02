@@ -1,5 +1,6 @@
 import random
 import asyncio
+import shutil
 import time
 from datetime import datetime, timedelta
 from configparser import ConfigParser
@@ -10,6 +11,8 @@ from google.oauth2 import service_account
 import psutil
 import re
 #需新增過濾廣告
+class CrawlerBlocked(Exception):
+    pass
 async def randomTime():
     timer =  round(random.uniform(2.0, 4.0), 2)
 
@@ -43,50 +46,62 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
         keep = True
 
         while keep:
-            articles = page.locator("article")
-            current_article_count = await articles.count()
-            for i in range(current_article_count):
-                anchors = articles.nth(i).locator("a")
-                article_element = articles.nth(i)
-                count = await anchors.count()
-                for j in range(count):
-                    anchor = anchors.nth(j)
-                    tweet_text = await article_element.text_content()
-                    link = anchor.locator('[data-testid="User-Name"]')
-                    link_locate =await link.locator('a[href*="/status/"]').count()
-                    if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
-                        break
-                    if link_locate>0:
-                        href = await anchor.get_attribute("href")
-                        if href:
-                            splitHref = href.split("/")
-                            auther = splitHref[1]
-                            postID = splitHref[3]
-                            has_image = await article_element.locator("[data-testid='tweetPhoto']").count() > 0
-                            has_video= await article_element.locator("[data-testid='videoPlayer']").count() > 0
-                            has_gif = await article_element.locator("[data-testid='videoComponent']").count() > 0
-                            has_imgOrVideo = has_image or has_video or has_gif
-                            data = {
-                                "auther": auther,
-                                "postID": postID,
-                                "has_image": has_imgOrVideo
-                            }
-                            all_hrefs.append(data)
-                        break
+            try:
+                articles = page.locator("article")
+                current_article_count = await articles.count()
+                for i in range(current_article_count):
+                    anchors = articles.nth(i).locator("a")
+                    anchors2=articles.nth(i).locator("div")
+                    article_element = articles.nth(i)
+                    count = await anchors.count()
+                    for j in range(count):
+                        #10/1
+                        anchor = anchors.nth(j)
+                        anchor2 = anchors2.nth(j)
+                        tweet_text = await article_element.text_content()
+                        link =anchor2.locator('div[data-testid="User-Name"]') #10/1 ?
+                        link_locate =link.locator('a[href*="/status/"]') #?
+                        link_count=await link_locate.count()
+                        link_time=await link_locate.locator("time").count() #10/1 ?
+                        print("1",link_count,link_time)
+                        if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
+                            break
+                        print("2")#下面這格條件式不符條件跑到 else
+                        if link_count >0 and link_time>0:#　要加條件
+                            href = await link_locate.get_attribute("href")
+                            if href:
+                                splitHref = href.split("/")
+                                auther = splitHref[1]
+                                postID = splitHref[3]
+                                has_image = await article_element.locator("[data-testid='tweetPhoto']").count() > 0
+                                has_video= await article_element.locator("[data-testid='videoPlayer']").count() > 0
+                                has_gif = await article_element.locator("[data-testid='videoComponent']").count() > 0
+                                has_imgOrVideo = has_image or has_video or has_gif
+                                data = {
+                                    "auther": auther,
+                                    "postID": postID,
+                                    "has_image": has_imgOrVideo
+                                }
+                                all_hrefs.append(data)
+                                print(data)
+                            break
+                        else:
+                            print("3")
+                    await page.wait_for_timeout(1000)
+                    await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
+                    await page.wait_for_timeout(wait_time)  #
 
-                await page.wait_for_timeout(1000)
-                await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
-                await page.wait_for_timeout(wait_time)  #
-
-                is_bottom = await page.evaluate("""
-                           () => {
-
-                               const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-                               return Math.abs(scrollTop + clientHeight - scrollHeight) < 1; 
-                           }
-                       """)
-                keep = not is_bottom
-
+                    is_bottom = await page.evaluate("""
+                               () => {
+    
+                                   const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+                                   return Math.abs(scrollTop + clientHeight - scrollHeight) < 1; 
+                               }
+                           """)
+                    keep = not is_bottom
+                breakpoint()
+            except Exception as e:
+                print(e)
         if not keep:
             break
 
@@ -169,6 +184,70 @@ async def go_retweet(page, NewData, unique_list):
     with open("posted.json", "w", encoding="utf-8") as w:
         json.dump(unique_list, w, indent=2, ensure_ascii=False)
 
+async def login_step(page,is_logged_in,accpwdData):
+    if is_logged_in:
+        print("已登入")
+        return
+    elif not is_logged_in:
+        print("未登入，進行登入")
+        await page.wait_for_load_state()  #
+
+        await page.locator("a[data-testid='loginButton']").click()
+
+        await page.wait_for_load_state()
+
+        await page.locator("input[autocomplete='username']").type(accpwdData[0], delay=400)
+
+        await page.click(
+            "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
+
+        await page.wait_for_load_state()
+
+        try:
+            await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
+        except:
+            await page.locator("input[name='text']").type(accpwdData[2], delay=300)
+
+            await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
+
+            await page.locator("input[name='password']").type(accpwdData[1], delay=250)
+            await page.locator("button[data-testid='LoginForm_Login_Button']").click()
+
+        else:
+            await page.locator("input[name='password']").type(accpwdData[1], delay=350)
+
+            await page.click("button[data-testid='LoginForm_Login_Button']")
+            await page.wait_for_load_state()
+
+        await page.wait_for_load_state()
+        await randomTime()
+        await page.goto("https://x.com/explore")
+        await page.wait_for_load_state()
+        await randomTime()
+        return
+
+async def checkInLogin(page,is_logged_in, accpwdData):
+    await page.goto(f"https://x.com/home")
+    await page.wait_for_load_state()
+    await randomTime()
+    is_in_profile=await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
+
+    if is_in_profile > 0:
+        pass
+    elif not is_in_profile > 0:
+        rm_firstTime_loginData=shutil.rmtree('./usr_data')
+        await page.goto("https://x.com")
+        await page.wait_for_load_state()
+        await randomTime()
+        await login_step(page, is_logged_in, accpwdData)
+        await page.goto(f"https://x.com/home")
+        await page.wait_for_load_state()
+        await randomTime()
+
+        is_in_homepage2 = await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
+        if not is_in_homepage2 > 0:
+            raise CrawlerBlocked("疑似被目標網站擋住，本次停止。")
+    return
 
 async def main():
     try:
@@ -199,12 +278,14 @@ async def main():
         else:
             print("set.ini 設定錯誤，請設定好再重新啟動")
             return
-
+        accpwdData = [acc, pw, username]
 
         async with async_playwright() as p:
             try:
                 # await 瀏覽器啟動
                 context = await p.chromium.launch_persistent_context(
+                    channel="chromium",
+                    bypass_csp=True,
                     slow_mo=100,
                     user_data_dir="./usr_data",
                     headless=True,
@@ -221,7 +302,7 @@ async def main():
                     },
                     args=[
                         "--lang=zh-TW",
-                        "--disable-blink-features=AutomationControlled",  # 移除 Playwright 標記
+                        "--disable-blink-features=AutomationControlled",
                         "--no-sandbox",
                         "--disable-setuid-sandbox",
                         "--disable-dev-shm-usage",
@@ -234,7 +315,8 @@ async def main():
 
                 # 至指定網址
                 await page.goto("https://x.com")
-                await page.wait_for_load_state()
+
+
             except Exception as a:
                 print(f'網頁啟動程序錯誤 {a}')
             else:
@@ -242,45 +324,18 @@ async def main():
                 try:
                     cookies = await context.cookies()
                     is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
-                    if is_logged_in:
+                    if not is_logged_in:
+                        await login_step(page, is_logged_in, accpwdData)
+                        await checkInLogin(page, is_logged_in, accpwdData)
+                    elif is_logged_in:
                         print("已登入")
-                    elif not is_logged_in:
-                        print("未登入，進行登入")
-                        await page.wait_for_load_state()  #
 
-                        await page.locator("a[data-testid='loginButton']").click()
-
-                        await page.wait_for_load_state()
-
-                        await page.locator("input[autocomplete='username']").type(acc, delay=400)
-
-                        await page.click(
-                            "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
-
-                        await page.wait_for_load_state()
-
-                        try:
-                            await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
-                        except:
-                            await page.locator("input[name='text']").type(username, delay=300)
-
-                            await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
-
-                            await page.locator("input[name='password']").type(pw, delay=250)
-                            await page.locator("button[data-testid='LoginForm_Login_Button']").click()
-
-                        else:
-                            await page.locator("input[name='password']").type(pw, delay=350)
-
-                            await page.click("button[data-testid='LoginForm_Login_Button']")
-                            await page.wait_for_load_state()
                 except Exception as e:
                     print("登入流程失敗:", e)
                     return
                 else:
 
-                    await page.goto("https://x.com/explore")
-                    await page.wait_for_load_state()
+
 
                     # 收尋
                     for keyword in keywords:
@@ -304,7 +359,6 @@ async def main():
                                 await page.wait_for_timeout(500)
                                 await page.mouse.wheel(0, -250)
 
-
                                 data = await scroll(page)
 
                                 retweet_pre_data, unique_list = await retweet_pre(userReject, data, page)
@@ -325,3 +379,5 @@ async def main():
         print("crawler.py : 爬蟲任務執行過久，強制結束")
 
 
+if __name__ == '__main__':
+    asyncio.run(main())
