@@ -63,10 +63,10 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
                         link_locate =link.locator('a[href*="/status/"]') #?
                         link_count=await link_locate.count()
                         link_time=await link_locate.locator("time").count() #10/1 ?
-                        print("1",link_count,link_time)
+
                         if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
                             break
-                        print("2")#下面這格條件式不符條件跑到 else
+                        #下面這格條件式不符條件跑到 else
                         if link_count >0 and link_time>0:#　要加條件
                             href = await link_locate.get_attribute("href")
                             if href:
@@ -83,10 +83,7 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
                                     "has_image": has_imgOrVideo
                                 }
                                 all_hrefs.append(data)
-                                print(data)
                             break
-                        else:
-                            print("3")
                     await page.wait_for_timeout(1000)
                     await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
                     await page.wait_for_timeout(wait_time)  #
@@ -99,7 +96,6 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
                                }
                            """)
                     keep = not is_bottom
-                breakpoint()
             except Exception as e:
                 print(e)
         if not keep:
