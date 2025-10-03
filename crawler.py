@@ -220,7 +220,7 @@ async def login_step(page,is_logged_in,accpwdData):
         await page.goto("https://x.com/explore")
         await page.wait_for_load_state()
         await randomTime()
-        return
+    return
 
 async def checkInLogin(page,is_logged_in, accpwdData):
     await page.goto(f"https://x.com/home")
@@ -374,6 +374,3 @@ async def main():
     except TimeoutError:
         print("crawler.py : 爬蟲任務執行過久，強制結束")
 
-
-if __name__ == '__main__':
-    asyncio.run(main())
