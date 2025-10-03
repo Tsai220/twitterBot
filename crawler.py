@@ -1,16 +1,14 @@
 import random
 import asyncio
 import shutil
-import time
 from datetime import datetime, timedelta
 from configparser import ConfigParser
 from playwright.async_api import async_playwright, expect
 import json
 from google.cloud import secretmanager
 from google.oauth2 import service_account
-import psutil
 import re
-#需新增過濾廣告
+
 class CrawlerBlocked(Exception):
     pass
 async def randomTime():
@@ -68,7 +66,9 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
                             break
                         #下面這格條件式不符條件跑到 else
                         if link_count >0 and link_time>0:#　要加條件
+
                             href = await link_locate.get_attribute("href")
+                            print(href ,"3")
                             if href:
                                 splitHref = href.split("/")
                                 auther = splitHref[1]
@@ -108,7 +108,6 @@ async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
         if t not in seen:
             seen.add(t)
             unique_data.append(d)
-
     return unique_data
 
 
@@ -181,68 +180,74 @@ async def go_retweet(page, NewData, unique_list):
         json.dump(unique_list, w, indent=2, ensure_ascii=False)
 
 async def login_step(page,is_logged_in,accpwdData):
-    if is_logged_in:
-        print("已登入")
-        return
-    elif not is_logged_in:
-        print("未登入，進行登入")
-        await page.wait_for_load_state()  #
+    try:
+        if is_logged_in:
+            print("已登入")
+            return
+        elif not is_logged_in:
+            print("未登入，進行登入")
+            await page.wait_for_load_state()  #
 
-        await page.locator("a[data-testid='loginButton']").click()
+            await page.locator("a[data-testid='loginButton']").click()
 
-        await page.wait_for_load_state()
-
-        await page.locator("input[autocomplete='username']").type(accpwdData[0], delay=400)
-
-        await page.click(
-            "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
-
-        await page.wait_for_load_state()
-
-        try:
-            await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
-        except:
-            await page.locator("input[name='text']").type(accpwdData[2], delay=300)
-
-            await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
-
-            await page.locator("input[name='password']").type(accpwdData[1], delay=250)
-            await page.locator("button[data-testid='LoginForm_Login_Button']").click()
-
-        else:
-            await page.locator("input[name='password']").type(accpwdData[1], delay=350)
-
-            await page.click("button[data-testid='LoginForm_Login_Button']")
             await page.wait_for_load_state()
 
-        await page.wait_for_load_state()
-        await randomTime()
-        await page.goto("https://x.com/explore")
-        await page.wait_for_load_state()
-        await randomTime()
+            await page.locator("input[autocomplete='username']").type(accpwdData[0], delay=400)
+
+            await page.click(
+                "#layers > div:nth-child(2) > div > div > div > div > div > div.css-175oi2r.r-1ny4l3l.r-18u37iz.r-1pi2tsx.r-1777fci.r-1xcajam.r-ipm5af.r-g6jmlv.r-1awozwy > div.css-175oi2r.r-1wbh5a2.r-htvplk.r-1udh08x.r-1867qdf.r-kwpbio.r-rsyp9y.r-1pjcn9w.r-1279nm1 > div > div > div.css-175oi2r.r-1ny4l3l.r-6koalj.r-16y2uox.r-14lw9ot.r-1wbh5a2 > div.css-175oi2r.r-16y2uox.r-1wbh5a2.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div > div > button:nth-child(6)")
+
+            await page.wait_for_load_state()
+
+            try:
+                await expect(page.locator("input[name='password']")).to_be_visible(timeout=2500)
+            except:
+                await page.locator("input[name='text']").type(accpwdData[2], delay=300)
+
+                await page.locator("button[data-testid='ocfEnterTextNextButton']").click()
+
+                await page.locator("input[name='password']").type(accpwdData[1], delay=250)
+                await page.locator("button[data-testid='LoginForm_Login_Button']").click()
+
+            else:
+                await page.locator("input[name='password']").type(accpwdData[1], delay=350)
+
+                await page.click("button[data-testid='LoginForm_Login_Button']")
+                await page.wait_for_load_state()
+
+            await page.wait_for_load_state()
+            await randomTime()
+            await page.goto("https://x.com/explore")
+            await page.wait_for_load_state()
+            await randomTime()
+    except Exception as e:
+        print("something blocked",e)
     return
 
 async def checkInLogin(page,is_logged_in, accpwdData):
-    await page.goto(f"https://x.com/home")
-    await page.wait_for_load_state()
-    await randomTime()
-    is_in_profile=await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
-
-    if is_in_profile > 0:
-        pass
-    elif not is_in_profile > 0:
-        rm_firstTime_loginData=shutil.rmtree('./usr_data')
-        await page.goto("https://x.com")
-        await page.wait_for_load_state()
-        await randomTime()
-        await login_step(page, is_logged_in, accpwdData)
+    try:
         await page.goto(f"https://x.com/home")
         await page.wait_for_load_state()
         await randomTime()
+        is_in_profile=await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
 
-        is_in_homepage2 = await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
-        if not is_in_homepage2 > 0:
-            raise CrawlerBlocked("疑似被目標網站擋住，本次停止。")
+        if is_in_profile > 0:
+            pass
+        elif not is_in_profile > 0:
+            rm_firstTime_loginData=shutil.rmtree('./usr_data')
+            await page.goto("https://x.com")
+            await page.wait_for_load_state()
+            await randomTime()
+            await login_step(page, is_logged_in, accpwdData)
+            await page.goto(f"https://x.com/home")
+            await page.wait_for_load_state()
+            await randomTime()
+
+            is_in_homepage2 = await page.locator("a[data-testid='SideNav_NewTweet_Button']").count()
+            if not is_in_homepage2 > 0:
+                raise CrawlerBlocked("疑似被目標網站擋住，本次停止。")
+    except Exception as e:
+        print("something blocked", e)
     return
 
 async def main():
@@ -373,4 +378,3 @@ async def main():
             await context.close()
     except TimeoutError:
         print("crawler.py : 爬蟲任務執行過久，強制結束")
-
