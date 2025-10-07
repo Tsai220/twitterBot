@@ -29,15 +29,12 @@ def delete_uerData():
             print(f'{usrData} 出現錯誤: {e}')
 
 def crawlerMain(timeoutAdaptive):
-    def run():
-        asyncio.run(crawler.main())
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(run)
-        try:
-            future.result(timeout=timeoutAdaptive)
-        except concurrent.futures.TimeoutError:
-            print("整體任務超時 強制結束")
+    try:
+        asyncio.run(asyncio.wait_for(crawler.main(), timeout=timeoutAdaptive))
+    except asyncio.TimeoutError:
+        print(f"整體任務超時{timeoutAdaptive} 秒， 強制結束")
+    except Exception as e:
+        print(f"任務執行時發生錯誤: {e}")
 
 def default_job():
     default_config = configparser.ConfigParser()

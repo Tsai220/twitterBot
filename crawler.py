@@ -291,15 +291,8 @@ async def main():
                     user_data_dir="./usr_data",
                     headless=True,
                     locale="zh-TW",
-                    user_agent=(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/116.0.0.0 Safari/537.36"
-                    ),
                     extra_http_headers={
                         "Accept-Language": "zh-TW",
-                        "Referer": "https://x.com/",
-                        "Origin": "https://x.com"
                     },
                     args=[
                         "--lang=zh-TW",
@@ -378,3 +371,6 @@ async def main():
             await context.close()
     except TimeoutError:
         print("crawler.py : 爬蟲任務執行過久，強制結束")
+
+if __name__ == '__main__':
+    asyncio.run(main())
