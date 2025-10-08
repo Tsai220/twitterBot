@@ -32,3 +32,4 @@ urllib3==2.5.0
 watchdog
 psutil
 apscheduler
+playwright-stealth

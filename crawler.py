@@ -7,6 +7,7 @@ from playwright.async_api import async_playwright, expect
 import json
 from google.cloud import secretmanager
 from google.oauth2 import service_account
+from playwright_stealth import Stealth
 import re
 
 class CrawlerBlocked(Exception):
@@ -37,148 +38,156 @@ async def get_secret(YOUR_PROJECT_ID, secret_id):
 
 
 async def scroll(page, wait_time: int = 1000, max_scroll: int = 30):
-    all_hrefs = []
-    await page.wait_for_load_state()
-    for a in range(max_scroll):
-        # 滾動到
-        keep = True
+    try:
+        all_hrefs = []
+        await page.wait_for_load_state()
+        for a in range(max_scroll):
+            # 滾動到
+            keep = True
 
-        while keep:
-            try:
-                articles = page.locator("article")
-                current_article_count = await articles.count()
-                for i in range(current_article_count):
-                    anchors = articles.nth(i).locator("a")
-                    anchors2=articles.nth(i).locator("div")
-                    article_element = articles.nth(i)
-                    count = await anchors.count()
-                    for j in range(count):
-                        #10/1
-                        anchor = anchors.nth(j)
-                        anchor2 = anchors2.nth(j)
-                        tweet_text = await article_element.text_content()
-                        link =anchor2.locator('div[data-testid="User-Name"]') #10/1 ?
-                        link_locate =link.locator('a[href*="/status/"]') #?
-                        link_count=await link_locate.count()
-                        link_time=await link_locate.locator("time").count() #10/1 ?
+            while keep:
+                try:
+                    articles = page.locator("article")
+                    current_article_count = await articles.count()
+                    for i in range(current_article_count):
+                        anchors = articles.nth(i).locator("a")
+                        anchors2=articles.nth(i).locator("div")
+                        article_element = articles.nth(i)
+                        count = await anchors.count()
+                        for j in range(count):
+                            #10/1
+                            anchor = anchors.nth(j)
+                            anchor2 = anchors2.nth(j)
+                            tweet_text = await article_element.text_content()
+                            link =anchor2.locator('div[data-testid="User-Name"]') #10/1 ?
+                            link_locate =link.locator('a[href*="/status/"]') #?
+                            link_count=await link_locate.count()
+                            link_time=await link_locate.locator("time").count() #10/1 ?
 
-                        if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
-                            break
-                        #下面這格條件式不符條件跑到 else
-                        if link_count >0 and link_time>0:#　要加條件
+                            if re.search(r'\b(promoted|sponsored|ad)\b', tweet_text, re.IGNORECASE): #廣告過濾
+                                break
+                            #下面這格條件式不符條件跑到 else
+                            if link_count >0 and link_time>0:#　要加條件
 
-                            href = await link_locate.get_attribute("href")
-                            print(href ,"3")
-                            if href:
-                                splitHref = href.split("/")
-                                auther = splitHref[1]
-                                postID = splitHref[3]
-                                has_image = await article_element.locator("[data-testid='tweetPhoto']").count() > 0
-                                has_video= await article_element.locator("[data-testid='videoPlayer']").count() > 0
-                                has_gif = await article_element.locator("[data-testid='videoComponent']").count() > 0
-                                has_imgOrVideo = has_image or has_video or has_gif
-                                data = {
-                                    "auther": auther,
-                                    "postID": postID,
-                                    "has_image": has_imgOrVideo
-                                }
-                                all_hrefs.append(data)
-                            break
-                    await page.wait_for_timeout(1000)
-                    await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
-                    await page.wait_for_timeout(wait_time)  #
+                                href = await link_locate.get_attribute("href")
+                                if href:
+                                    splitHref = href.split("/")
+                                    auther = splitHref[1]
+                                    postID = splitHref[3]
+                                    has_image = await article_element.locator("[data-testid='tweetPhoto']").count() > 0
+                                    has_video= await article_element.locator("[data-testid='videoPlayer']").count() > 0
+                                    has_gif = await article_element.locator("[data-testid='videoComponent']").count() > 0
+                                    has_imgOrVideo = has_image or has_video or has_gif
+                                    data = {
+                                        "auther": auther,
+                                        "postID": postID,
+                                        "has_image": has_imgOrVideo
+                                    }
+                                    all_hrefs.append(data)
+                                break
+                        await page.wait_for_timeout(1000)
+                        await page.evaluate("window.scrollBy(0, 400)")  # 極端情況下每400px會畫面更新
+                        await page.wait_for_timeout(wait_time)  #
 
-                    is_bottom = await page.evaluate("""
-                               () => {
-    
-                                   const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-                                   return Math.abs(scrollTop + clientHeight - scrollHeight) < 1; 
-                               }
-                           """)
-                    keep = not is_bottom
-            except Exception as e:
-                print(e)
-        if not keep:
-            break
+                        is_bottom = await page.evaluate("""
+                                   () => {
+        
+                                       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+                                       return Math.abs(scrollTop + clientHeight - scrollHeight) < 1; 
+                                   }
+                               """)
+                        keep = not is_bottom
+                except Exception as e:
+                    print(e)
+            if not keep:
+                break
 
-    seen = set()
-    unique_data = []
-    for d in all_hrefs:
-        t = tuple(d.items())
-        if t not in seen:
-            seen.add(t)
-            unique_data.append(d)
+        seen = set()
+        unique_data = []
+        for d in all_hrefs:
+            t = tuple(d.items())
+            if t not in seen:
+                seen.add(t)
+                unique_data.append(d)
+    except Exception as e:
+        print("scroll step ",e)
+        return
     return unique_data
 
 
 async def retweet_pre(userReject, data, page):
-    unique_list = []
-    retweet_pre_data = []
-    seen = set()
+    try:
+        unique_list = []
+        retweet_pre_data = []
+        seen = set()
 
-    # 先把讀取過來的資料先去除重複的ID -> 過濾掉拒絕的 -> 過濾沒照片
+        # 先把讀取過來的資料先去除重複的ID -> 過濾掉拒絕的 -> 過濾沒照片
 
-    # 重複的ID
-    with open("posted.json", "r") as r:
-        a = json.load(r)
-        merge = a + data
+        # 重複的ID
+        with open("posted.json", "r") as r:
+            a = json.load(r)
+            merge = a + data
 
-        for i in merge:
-            hashed_dict = tuple(sorted(i.items()))
+            for i in merge:
+                hashed_dict = tuple(sorted(i.items()))
 
-            if hashed_dict not in seen:
-                unique_list.append(i)
-                seen.add(hashed_dict)
+                if hashed_dict not in seen:
+                    unique_list.append(i)
+                    seen.add(hashed_dict)
 
-    # 拒絕的
-    if userReject != "None":  # <-有人拒絕的意思
-        delUsr = set(userReject)
-        unique_list = [d for d in unique_list if d.get('auther') not in delUsr]
+        # 拒絕的
+        if userReject != "None":  # <-有人拒絕的意思
+            delUsr = set(userReject)
+            unique_list = [d for d in unique_list if d.get('auther') not in delUsr]
 
-    # 過濾沒照片
-    for item in unique_list:
-        if not item['has_image']:
-            targetID = item['postID']
-            unique_list = [item for item in unique_list if item["postID"] != targetID]
+        # 過濾沒照片
+        for item in unique_list:
+            if not item['has_image']:
+                targetID = item['postID']
+                unique_list = [item for item in unique_list if item["postID"] != targetID]
 
-    with open("posted.json", "r") as r:
-        old_data = json.load(r)
+        with open("posted.json", "r") as r:
+            old_data = json.load(r)
 
-    old_ids = {d["postID"] for d in old_data}
+        old_ids = {d["postID"] for d in old_data}
 
-    # 只取新資料裡的
-    new_data = [d for d in data if d["postID"] not in old_ids]
+        # 只取新資料裡的
+        new_data = [d for d in data if d["postID"] not in old_ids]
 
-    # 過濾拒絕的
-    if userReject != "None":
-        delUsr = set(userReject)
-        new_data = [d for d in new_data if d.get('auther') not in delUsr]
+        # 過濾拒絕的
+        if userReject != "None":
+            delUsr = set(userReject)
+            new_data = [d for d in new_data if d.get('auther') not in delUsr]
 
-    # 過濾沒照片
-    retweet_pre_data = [d for d in new_data if d.get("has_image", False)]
-
+        # 過濾沒照片
+        retweet_pre_data = [d for d in new_data if d.get("has_image", False)]
+    except Exception as e:
+        print("retweet pre step ",e)
+        return
     return retweet_pre_data, unique_list
 
 
 async def go_retweet(page, NewData, unique_list):
-    for post in NewData:
-        print(f"轉跳{post['auther']},{post['postID']}")
-        await page.goto(f"https://x.com/{post['auther']}/status/{post['postID']}", timeout=60000)
-        await page.wait_for_load_state()
+    try:
+        for post in NewData:
+            print(f"轉跳{post['auther']},{post['postID']}")
+            await page.goto(f"https://x.com/{post['auther']}/status/{post['postID']}", timeout=60000)
+            await page.wait_for_load_state()
 
-        # 取得第一篇文章
-        first_article = page.locator("article").first
+            # 取得第一篇文章
+            first_article = page.locator("article").first
 
-        retweet_button = first_article.locator("button[data-testid*='retweet']").first
+            retweet_button = first_article.locator("button[data-testid*='retweet']").first
 
-        await retweet_button.click()
-        await randomTime()
-        await page.click(
-            "#layers > div.css-175oi2r.r-zchlnj.r-1d2f490.r-u8s1d.r-ipm5af.r-1p0dtai.r-105ug2t > div > div > div > div.css-175oi2r.r-1ny4l3l > div > div.css-175oi2r.r-j2cz3j.r-14lw9ot.r-1q9bdsx.r-1upvrn0.r-1udh08x.r-u8s1d > div > div > div > div")
+            await retweet_button.click()
+            await randomTime()
+            await page.click(
+                "#layers > div.css-175oi2r.r-zchlnj.r-1d2f490.r-u8s1d.r-ipm5af.r-1p0dtai.r-105ug2t > div > div > div > div.css-175oi2r.r-1ny4l3l > div > div.css-175oi2r.r-j2cz3j.r-14lw9ot.r-1q9bdsx.r-1upvrn0.r-1udh08x.r-u8s1d > div > div > div > div")
 
-    with open("posted.json", "w", encoding="utf-8") as w:
-        json.dump(unique_list, w, indent=2, ensure_ascii=False)
-
+        with open("posted.json", "w", encoding="utf-8") as w:
+            json.dump(unique_list, w, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Retweet step: {e}")
 async def login_step(page,is_logged_in,accpwdData):
     try:
         if is_logged_in:
@@ -221,7 +230,7 @@ async def login_step(page,is_logged_in,accpwdData):
             await page.wait_for_load_state()
             await randomTime()
     except Exception as e:
-        print("something blocked",e)
+        print("login step ",e)
     return
 
 async def checkInLogin(page,is_logged_in, accpwdData):
@@ -247,7 +256,7 @@ async def checkInLogin(page,is_logged_in, accpwdData):
             if not is_in_homepage2 > 0:
                 raise CrawlerBlocked("疑似被目標網站擋住，本次停止。")
     except Exception as e:
-        print("something blocked", e)
+        print("checkInLogin step ", e)
     return
 
 async def main():
@@ -281,7 +290,7 @@ async def main():
             return
         accpwdData = [acc, pw, username]
 
-        async with async_playwright() as p:
+        async with Stealth().use_async(async_playwright()) as p:
             try:
                 # await 瀏覽器啟動
                 context = await p.chromium.launch_persistent_context(
@@ -307,15 +316,16 @@ async def main():
                 )
                 page = await context.new_page()
 
-                # 至指定網址
-                await page.goto("https://x.com")
-
-
             except Exception as a:
                 print(f'網頁啟動程序錯誤 {a}')
             else:
                 print(f'網頁啟動完成')
                 try:
+
+                    await page.goto("https://x.com")
+                    await page.wait_for_load_state()
+                    await randomTime()
+
                     cookies = await context.cookies()
                     is_logged_in = any(cookie['name'] == 'auth_token' for cookie in cookies)
                     if not is_logged_in:
@@ -371,6 +381,7 @@ async def main():
             await context.close()
     except TimeoutError:
         print("crawler.py : 爬蟲任務執行過久，強制結束")
+
 
 if __name__ == '__main__':
     asyncio.run(main())
